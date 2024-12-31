@@ -41,7 +41,7 @@ class ResultPath:
     cost: int
     path: Path
 
-    def to_path(self):
+    def to_str_path(self) -> str:
         flatten_path = self.path.flatten()
         return "\n".join(f"{x[1]} {x[0]}" for x in flatten_path)
 
@@ -74,11 +74,11 @@ class QueueItem:
 def load_input(file_name):
     with open(file_name) as f:
         data = f.read()
-        if data[0].isdigit():
+        if " " in data.split('\n')[0]:
             lines = data.splitlines()
             sizes, grid = tuple(map(int, re.findall(r'\d+', lines[0]))), lines[1:]
         else:
-            sizes, grid = None, data
+            sizes, grid = None, data.split()
         return sizes, [list(line) for line in grid]
 
 
@@ -145,31 +145,30 @@ def create_state(row, column, value, princesses_loc, prev_state):
     else:
         generator = prev_state.generator
 
-    return DijkstraState(
-        node=(row, column), generator=generator, princesses=princesses, dragon=dragon
-    )
+    return DijkstraState(node=(row, column), generator=generator, princesses=princesses, dragon=dragon)
 
 
 def dijkstra(
         data: list[list[str]],
         graph: DefaultDict[tuple, list[Node]],
         start: tuple,
-        princesses_loc: dict[tuple, int]
+        princesses_loc: dict[tuple, int],
+        tqdm_enabled=False
 ) -> ResultPath | None:
-    start_state = DijkstraState(
+    start_state = create_state(start[0], start[0], data[start[0]][start[1]], princesses_loc, DijkstraState(
         node=start, generator=False, princesses=tuple([False] * len(princesses_loc)), dragon=False
-    )
-    start_state = create_state(start[0], start[0], data[start[0]][start[1]], princesses_loc, start_state)
-    queue = [QueueItem(0, start_state, None)]
+    ))
+    initial_cost = 2 if data[start[0]][start[1]] == 'H' else 1
+    queue = [QueueItem(initial_cost, start_state, None)]
     mins = {start_state: queue[0].cost}
-    # pbar = tqdm()
+    pbar = tqdm(disable=not tqdm_enabled)
 
     while queue:
         queue_item: QueueItem = heappop(queue)
         curr_state = queue_item.curr_state
         path = Path(curr_state.node, queue_item.path)
-        # pbar.set_description(f"Cost: {queue_item.cost}, HeapSize: {len(queue)}, Explored nodes: {len(mins)}")
-        if curr_state.dragon and all(curr_state.princesses):
+        pbar.set_description(f"Cost: {queue_item.cost}, HeapSize: {len(queue)}, Explored nodes: {len(mins)}")
+        if all(curr_state.princesses):
             return ResultPath(queue_item.cost, path)
 
         for target in graph[curr_state.node]:
